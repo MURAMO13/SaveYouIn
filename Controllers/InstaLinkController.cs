@@ -1,75 +1,65 @@
-﻿using System;
-using System.Diagnostics;
-using System.IO;
-using System.Net.Http;
-using System.Threading.Tasks;
-using Telegram.Bot;
-using Telegram.Bot.Types;
-
-namespace SaveYouIn.Controllers
+﻿namespace SaveYouIn.Controllers;
+internal class InstaLinkController
 {
-    internal class InstaLinkController
+    private readonly ITelegramBotClient _telegramBot;
+
+    public InstaLinkController(ITelegramBotClient telegramBot)
     {
-        private readonly ITelegramBotClient _telegramBot;
+        _telegramBot = telegramBot;
+    }
 
-        public InstaLinkController(ITelegramBotClient telegramBot)
+    internal async Task DownloadInstagramMediaAsync(Message message, Uri mediaUri, int oldMsgId)
+    {
+        try
         {
-            _telegramBot = telegramBot;
-        }
+            string filePath = Path.Combine(Directory.GetCurrentDirectory(), "instagram_video.mp4");
 
-        internal async Task DownloadInstagramMediaAsync(Message message, Uri mediaUri, int oldMsgId)
-        {
+            // Запускаем yt-dlp
+            ProcessStartInfo startInfo = new ProcessStartInfo
+            {
+                FileName = "yt-dlp",
+                Arguments = $"\"{mediaUri}\" -f bestvideo+bestaudio --merge-output-format mp4 -o \"{filePath}\" --no-warnings",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using (Process process = new Process { StartInfo = startInfo })
+            {
+                process.Start();
+                string error = await process.StandardError.ReadToEndAsync();
+                await process.WaitForExitAsync();
+
+                if (!File.Exists(filePath))
+                {
+                    await _telegramBot.SendMessage(message.Chat.Id, $"Ошибка скачивания видео: {error}");
+                    return;
+                }
+            }
+
+            // Отправка видео в Telegram
+            await using (var stream = File.OpenRead(filePath))
+            {
+                await _telegramBot.SendVideo(message.Chat.Id, InputFile.FromStream(stream));
+            }
+
+            // Удаляем старое сообщение, если нужно
             try
             {
-                string filePath = Path.Combine(Directory.GetCurrentDirectory(), "instagram_video.mp4");
-
-                // Запускаем yt-dlp
-                ProcessStartInfo startInfo = new ProcessStartInfo
-                {
-                    FileName = "yt-dlp",
-                    Arguments = $"\"{mediaUri}\" -f bestvideo+bestaudio --merge-output-format mp4 -o \"{filePath}\" --no-warnings",
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                };
-
-                using (Process process = new Process { StartInfo = startInfo })
-                {
-                    process.Start();
-                    string error = await process.StandardError.ReadToEndAsync();
-                    await process.WaitForExitAsync();
-
-                    if (!File.Exists(filePath))
-                    {
-                        await _telegramBot.SendMessage(message.Chat.Id, $"Ошибка скачивания видео: {error}");
-                        return;
-                    }
-                }
-
-                // Отправка видео в Telegram
-                await using (var stream = File.OpenRead(filePath))
-                {
-                    await _telegramBot.SendVideo(message.Chat.Id, InputFile.FromStream(stream));
-                }
-
-                // Удаляем старое сообщение, если нужно
-                try
-                {
-                    await _telegramBot.DeleteMessage(message.Chat.Id, oldMsgId);
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Не удалось удалить сообщение: {ex.Message}");
-                }
-
-                // Удаляем файл
-                File.Delete(filePath);
+                await _telegramBot.DeleteMessage(message.Chat.Id, oldMsgId);
             }
             catch (Exception ex)
             {
-                await _telegramBot.SendMessage(message.Chat.Id, $"Ошибка: {ex.Message.ToString()}");
+                Console.WriteLine($"Не удалось удалить сообщение: {ex.Message}");
             }
+
+            // Удаляем файл
+            File.Delete(filePath);
+        }
+        catch (Exception ex)
+        {
+            await _telegramBot.SendMessage(message.Chat.Id, $"Ошибка: {ex.Message.ToString()}");
         }
     }
 }
