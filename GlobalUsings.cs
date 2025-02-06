@@ -1,0 +1,14 @@
+﻿global using Microsoft.Extensions.DependencyInjection;
+global using Microsoft.Extensions.Hosting;
+global using System.Collections.Concurrent;
+global using System.Text;
+global using Telegram.Bot;
+global using Telegram.Bot.Exceptions;
+global using Telegram.Bot.Polling;
+global using Telegram.Bot.Types;
+global using Telegram.Bot.Types.Enums;
+global using SaveYouIn.Controllers;
+global using HtmlAgilityPack;
+global using SaveYouIn.Services;
+global using System.Diagnostics;
+global using SaveYouIn.Configuration;
